@@ -177,23 +177,25 @@ end
 --   Core Farm Functions
 -- ================================================
 
--- Plant a crop at a given position using the PlantCrop remote
-local function PlantAtPosition(position, instance)
+-- Plant at player's current position (Y - 3) using the PlantCrop remote
+local function PlantAtPosition()
     local PlantCrop = GetRemote("PlantCrop")
-    local PlantLahanCrop = GetRemote("PlantLahanCrop")
     if not PlantCrop then return end
 
     local cropData = CropConfig[SelectedCrop]
     if not cropData then return end
 
+    local hrp = GetHRP()
+    if not hrp then return end
+
+    local plantPos = hrp.Position - Vector3.new(0, 3, 0)
+
     -- Equip the seed tool
     EquipTool(cropData.ToolName)
     task.wait(0.1)
 
-    -- Fire the plant remote (same as clicking on AreaTanam)
-    local remote = PlantLahanCrop or PlantCrop
     pcall(function()
-        remote:FireServer(position)
+        PlantCrop:FireServer(plantPos)
     end)
 end
 
@@ -267,35 +269,16 @@ local function StartAutoFarm()
         local hrp = GetHRP()
         if not hrp then return end
 
-        -- Try to plant in all available slots
-        local area = GetAreaTanam()
-        if area then
+        -- Plant at current position (Y - 3)
+        local PlantCrop = GetRemote("PlantCrop")
+        if PlantCrop then
             local cropData = CropConfig[SelectedCrop]
             if cropData then
                 EquipTool(cropData.ToolName)
                 task.wait(0.05)
-                for _, slot in ipairs(area:GetDescendants()) do
-                    if not AutoFarming then break end
-                    if slot:IsA("BasePart") then
-                        -- Check if slot is empty (no crop model as child)
-                        local hasCrop = false
-                        for _, child in ipairs(slot:GetChildren()) do
-                            if child:IsA("Model") then
-                                hasCrop = true
-                                break
-                            end
-                        end
-                        if not hasCrop then
-                            pcall(function()
-                                local PlantCrop = GetRemote("PlantCrop")
-                                if PlantCrop then
-                                    PlantCrop:FireServer(slot.Position)
-                                end
-                            end)
-                            task.wait(PlantDelay)
-                        end
-                    end
-                end
+                pcall(function()
+                    PlantCrop:FireServer(hrp.Position - Vector3.new(0, 3, 0))
+                end)
             end
         end
 
@@ -360,33 +343,19 @@ local function StartAutoPlant()
     AutoPlanting = true
     task.spawn(function()
         while AutoPlanting do
-            local area = GetAreaTanam()
-            if area then
+            local hrp = GetHRP()
+            if hrp then
+                local PlantCrop = GetRemote("PlantCrop")
                 local cropData = CropConfig[SelectedCrop]
-                if cropData then
+                if PlantCrop and cropData then
                     EquipTool(cropData.ToolName)
                     task.wait(0.1)
-                    for _, slot in ipairs(area:GetDescendants()) do
-                        if not AutoPlanting then break end
-                        if slot:IsA("BasePart") then
-                            local hasCrop = false
-                            for _, child in ipairs(slot:GetChildren()) do
-                                if child:IsA("Model") then hasCrop = true break end
-                            end
-                            if not hasCrop then
-                                pcall(function()
-                                    local PlantCrop = GetRemote("PlantCrop")
-                                    if PlantCrop then
-                                        PlantCrop:FireServer(slot.Position)
-                                    end
-                                end)
-                                task.wait(PlantDelay)
-                            end
-                        end
-                    end
+                    pcall(function()
+                        PlantCrop:FireServer(hrp.Position - Vector3.new(0, 3, 0))
+                    end)
                 end
             end
-            task.wait(1)
+            task.wait(PlantDelay)
         end
     end)
 end
