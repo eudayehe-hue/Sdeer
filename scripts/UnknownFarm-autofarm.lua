@@ -133,6 +133,59 @@ local AutoBuyToolConn = nil
 local SelectedToolToBuy = ""
 
 -- ================================================
+--   Gift Functions (from decompile)
+-- ================================================
+
+local GiftData = {
+    GiftableList = {},
+    History = {}
+}
+
+local function GetGiftableList()
+    local RequestGift = GetTutorialRemote("RequestGift")
+    if RequestGift then
+        local result = pcall(function()
+            return RequestGift:InvokeServer("GET_GIFTABLE_LIST")
+        end)
+        if result and result.Success then
+            GiftData.GiftableList = result.List or {}
+            return result.List
+        end
+    end
+    return {}
+end
+
+local function ClaimGift(targetUserId)
+    local RequestGift = GetTutorialRemote("RequestGift")
+    if RequestGift then
+        local result = pcall(function()
+            return RequestGift:InvokeServer("PROMPT_GIFT", targetUserId)
+        end)
+        return result
+    end
+    return nil
+end
+
+local function GetGiftHistory()
+    local RequestGift = GetTutorialRemote("RequestGift")
+    if RequestGift then
+        local result = pcall(function()
+            return RequestGift:InvokeServer("GET_HISTORY")
+        end)
+        if result and result.Success then
+            GiftData.History = result.History or {}
+            return result.History
+        end
+    end
+    return {}
+end
+
+-- Auto claim gift state
+local AutoClaimingGift = false
+local AutoClaimGiftConn = nil
+local ClaimGiftDelay = 5.0
+
+-- ================================================
 --   Crop Config (from decompiled CropConfig)
 -- ================================================
 
@@ -1010,7 +1063,78 @@ ShopTab:CreateSlider({
     end
 })
 
--- ---- Tab 8: Info ----
+-- ---- Tab 8: Gift ----
+local GiftTab = Window:CreateTab("🎁 Gift", "gift")
+
+GiftTab:CreateButton({
+    Name = "Ambil Daftar Gift",
+    Callback = function()
+        local gifts = GetGiftableList()
+        if #gifts > 0 then
+            Rayfield:Notify({ Title = "Sukses", Content = "Daftar gift berhasil diambil! (" .. #gifts .. " players)", Duration = 3 })
+        else
+            Rayfield:Notify({ Title = "Info", Content = "Tidak ada gift yang tersedia.", Duration = 3 })
+        end
+    end
+})
+
+GiftTab:CreateButton({
+    Name = "Ambil Riwayat Gift",
+    Callback = function()
+        local history = GetGiftHistory()
+        Rayfield:Notify({ Title = "Riwayat Gift", Content = "Total: " .. #history .. " riwayat", Duration = 3 })
+    end
+})
+
+GiftTab:CreateDivider()
+
+GiftTab:CreateToggle({
+    Name = "Auto Klaim Gift",
+    CurrentValue = false,
+    Flag = "AutoClaimGift",
+    Callback = function(val)
+        AutoClaimingGift = val
+        if val then
+            if not AutoClaimGiftConn then
+                AutoClaimGiftConn = RunService.Heartbeat:Connect(function()
+                    if AutoClaimingGift then
+                        local gifts = GetGiftableList()
+                        for _, gift in ipairs(gifts) do
+                            if gift and gift.UserId then
+                                local result = ClaimGift(gift.UserId)
+                                if result and result.Success then
+                                    Rayfield:Notify({ Title = "Gift Diklaim!", Content = result.Message or "Gift berhasil!", Duration = 2 })
+                                end
+                            end
+                        end
+                        task.wait(ClaimGiftDelay)
+                    end
+                end)
+            end
+            Rayfield:Notify({ Title = "Auto Klaim Gift", Content = "Aktif!", Duration = 2 })
+        else
+            if AutoClaimGiftConn then
+                AutoClaimGiftConn:Disconnect()
+                AutoClaimGiftConn = nil
+            end
+            Rayfield:Notify({ Title = "Auto Klaim Gift", Content = "Nonaktif!", Duration = 2 })
+        end
+    end
+})
+
+GiftTab:CreateSlider({
+    Name = "Auto Klaim Delay",
+    Range = {1, 30},
+    Increment = 1,
+    Suffix = "s",
+    CurrentValue = 5.0,
+    Flag = "ClaimGiftDelay",
+    Callback = function(val)
+        ClaimGiftDelay = val
+    end
+})
+
+-- ---- Tab 9: Info ----
 local InfoTab = Window:CreateTab("ℹ️ Info", "info")
 
 InfoTab:CreateSection("Crop Info")
@@ -1030,6 +1154,7 @@ InfoTab:CreateLabel("RequestSell - Jual hasil panen")
 InfoTab:CreateLabel("ToggleAutoHarvest - Auto harvest server-side")
 InfoTab:CreateLabel("RequestShop - Beli bibit (GET_LIST, BUY)")
 InfoTab:CreateLabel("RequestToolShop - Beli alat (GET_LIST, BUY)")
+InfoTab:CreateLabel("RequestGift - Klaim gift (GET_GIFTABLE_LIST, PROMPT_GIFT, GET_HISTORY)")
 
 -- ================================================
 --   Notify on Load
