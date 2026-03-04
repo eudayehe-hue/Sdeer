@@ -85,7 +85,7 @@ export async function GET() {
 | Date | Changes |
 |------|---------|
 | Initial | Template created with base setup |
-| 2026-03-04 | Built modern dark GUI (Nexus landing page) with navbar, hero, features grid, CTA, footer. Added noclip feature to fly-rayfield.lua Roblox script with Rayfield UI tab. |
+| 2026-03-04 | Modified Getfish.lua: replaced Blatant Mode 2 with RemoteAutofishing→throw→ReelFinished→Reel→stop loop, added parallel BobberFire every 0.01s, removed mode dropdown, skipped key system
 | 2026-03-04 | Created autofarm-rayfield.lua for SAWAH Indo Voice Chat game with 7 tabs: Auto Farm, Auto Collect, Auto Plant, Auto Sell, Utilities (Speed/Noclip/InfJump/AntiAFK), Teleport, Settings. |
 | 2026-03-04 | Pulled UnknownGame_Bulk_Part1_2026-03-04_05-21-46.lua (35k line decompile) from remote. Created UnknownFarm-autofarm.lua with 7 tabs using actual remotes (PlantCrop, HarvestCrop, RequestSell, ToggleAutoHarvest) and CropConfig data (Padi/Jagung/Tomat/Terong/Strawberry/Sawit/Durian) from decompile. |
 | 2026-03-04 | Created UPD_Titan_Fishing_Bulk_2026-03-04_17-25-17.lua for Titan Fishing game with Rayfield UI. Features: Auto Fish (with delay settings), Auto Sell, Shop (bait & rods), Teleport (fishing spots & NPCs), Utilities (Speed Hack, Noclip, InfJump, Anti AFK), Settings. |
