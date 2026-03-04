@@ -41,6 +41,10 @@ local FlyConnection = nil
 local BodyVelocity = nil
 local BodyGyro = nil
 
+-- Noclip
+local Noclipping = false
+local NoclipConnection = nil
+
 -- ================================================
 --   Fly Functions
 -- ================================================
@@ -160,10 +164,46 @@ local function StopFly()
 end
 
 -- ================================================
+--   Noclip Functions
+-- ================================================
+
+local function StartNoclip()
+    Noclipping = true
+    NoclipConnection = RunService.Stepped:Connect(function()
+        if not Noclipping then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function StopNoclip()
+    Noclipping = false
+    if NoclipConnection then
+        NoclipConnection:Disconnect()
+        NoclipConnection = nil
+    end
+    -- Restore collision
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- ================================================
 --   Rayfield UI Tabs
 -- ================================================
 
 local MainTab = Window:CreateTab("✈️ Fly", 4483362458)
+local NoclipTab = Window:CreateTab("👻 Noclip", 4483362458)
 local SettingsTab = Window:CreateTab("⚙️ Settings", 4483362458)
 
 -- ================================================
@@ -206,6 +246,46 @@ Rayfield:CreateSection({
 Window:CreateLabel("W/A/S/D — Gerak Terbang", MainTab)
 Window:CreateLabel("Space — Naik", MainTab)
 Window:CreateLabel("Left Shift — Turun", MainTab)
+
+-- ================================================
+--   Noclip Tab
+-- ================================================
+
+Rayfield:CreateSection({
+    Name = "Noclip Control"
+}, NoclipTab)
+
+Window:CreateToggle({
+    Name = "Enable Noclip",
+    CurrentValue = false,
+    Flag = "NoclipToggle",
+    Callback = function(Value)
+        if Value then
+            StartNoclip()
+            Rayfield:Notify({
+                Title = "Haja Hub",
+                Content = "Noclip Enabled! Kamu bisa menembus dinding.",
+                Duration = 3,
+                Image = 4483362458,
+            })
+        else
+            StopNoclip()
+            Rayfield:Notify({
+                Title = "Haja Hub",
+                Content = "Noclip Disabled.",
+                Duration = 3,
+                Image = 4483362458,
+            })
+        end
+    end,
+}, NoclipTab)
+
+Rayfield:CreateSection({
+    Name = "Info"
+}, NoclipTab)
+
+Window:CreateLabel("Noclip memungkinkan kamu menembus semua objek.", NoclipTab)
+Window:CreateLabel("Gunakan bersama Fly untuk eksplorasi bebas!", NoclipTab)
 
 -- ================================================
 --   Settings Tab - Speed Slider
@@ -252,6 +332,13 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
     BodyVelocity = nil
     BodyGyro = nil
+
+    -- Reset noclip on respawn
+    Noclipping = false
+    if NoclipConnection then
+        NoclipConnection:Disconnect()
+        NoclipConnection = nil
+    end
 end)
 
 -- ================================================
@@ -260,7 +347,7 @@ end)
 
 Rayfield:Notify({
     Title = "Haja Hub Loaded!",
-    Content = "Fly Script siap digunakan. Buka tab Fly untuk mulai.",
+    Content = "Fly & Noclip siap digunakan. Buka tab Fly atau Noclip untuk mulai.",
     Duration = 5,
     Image = 4483362458,
 })

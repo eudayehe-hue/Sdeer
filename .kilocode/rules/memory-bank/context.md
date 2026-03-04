@@ -85,3 +85,5 @@ export async function GET() {
 | Date | Changes |
 |------|---------|
 | Initial | Template created with base setup |
+| 2026-03-04 | Built modern dark GUI (Nexus landing page) with navbar, hero, features grid, CTA, footer. Added noclip feature to fly-rayfield.lua Roblox script with Rayfield UI tab. |
+| 2026-03-04 | Created autofarm-rayfield.lua for SAWAH Indo Voice Chat game with 7 tabs: Auto Farm, Auto Collect, Auto Plant, Auto Sell, Utilities (Speed/Noclip/InfJump/AntiAFK), Teleport, Settings. |
