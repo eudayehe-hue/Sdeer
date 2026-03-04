@@ -138,12 +138,8 @@ GetKeyBtn.Font = Enum.Font.GothamBold
 GetKeyBtn.Parent = KeyFrame
 Instance.new("UICorner", GetKeyBtn).CornerRadius = UDim.new(0, 6)
 
--- =============================================================================
--- [3] MAIN SCRIPT FUNCTION (DUALITY HUB) - FULL FEATURES + FISHING CORE + AUTO MODE
--- =============================================================================
-
-local function StartDualityHub()
-    KeyGui:Destroy()
+-- START LANGSUNG (KEY SYSTEM DILEWATI)
+StartDualityHub()
     
     local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
