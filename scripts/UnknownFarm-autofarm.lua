@@ -58,6 +58,81 @@ local function GetTutorialRemote(name)
 end
 
 -- ================================================
+--   Shop Functions (from decompile)
+-- ================================================
+
+local ShopData = {
+    Seeds = {},
+    Tools = {}
+}
+
+-- Get shop seed list
+local function GetSeedList()
+    local RequestShop = GetRemote("RequestShop")
+    if RequestShop then
+        local result = pcall(function()
+            return RequestShop:InvokeServer("GET_LIST")
+        end)
+        if result and result.Success and result.Seeds then
+            ShopData.Seeds = result.Seeds
+            return result.Seeds
+        end
+    end
+    return {}
+end
+
+-- Get tool shop list
+local function GetToolList()
+    local RequestToolShop = GetRemote("RequestToolShop")
+    if RequestToolShop then
+        local result = pcall(function()
+            return RequestToolShop:InvokeServer("GET_LIST")
+        end)
+        if result and result.Success and result.Tools then
+            ShopData.Tools = result.Tools
+            return result.Tools
+        end
+    end
+    return {}
+end
+
+-- Buy seeds
+local function BuySeed(seedName, quantity)
+    local RequestShop = GetRemote("RequestShop")
+    if RequestShop then
+        local result = pcall(function()
+            return RequestShop:InvokeServer("BUY", seedName, quantity or 1)
+        end)
+        return result
+    end
+    return nil
+end
+
+-- Buy tool
+local function BuyTool(toolName)
+    local RequestToolShop = GetRemote("RequestToolShop")
+    if RequestToolShop then
+        local result = pcall(function()
+            return RequestToolShop:InvokeServer("BUY", toolName)
+        end)
+        return result
+    end
+    return nil
+end
+
+-- Auto buy seeds state
+local AutoBuyingSeeds = false
+local AutoBuySeedConn = nil
+local SelectedSeedToBuy = "Bibit Padi"
+local BuyQuantity = 10
+local BuySeedDelay = 2.0
+
+-- Auto buy tools state
+local AutoBuyingTools = false
+local AutoBuyToolConn = nil
+local SelectedToolToBuy = ""
+
+-- ================================================
 --   Crop Config (from decompiled CropConfig)
 -- ================================================
 
@@ -825,7 +900,117 @@ TpTab:CreateButton({
     end
 })
 
--- ---- Tab 7: Info ----
+-- ---- Tab 7: Shop ----
+local ShopTab = Window:CreateTab("🛒 Shop", "shopping-cart")
+
+-- Seed selection dropdown
+local seedNames = {"Bibit Padi", "Bibit Jagung", "Bibit Tomat", "Bibit Terong", "Bibit Strawberry", "Bibit Sawit", "Bibit Durian"}
+
+ShopTab:CreateDropdown({
+    Name = "Pilih Bibit",
+    Options = seedNames,
+    CurrentValue = seedNames[1],
+    Flag = "SeedSelection",
+    Callback = function(val)
+        SelectedSeedToBuy = val
+    end
+})
+
+ShopTab:CreateSlider({
+    Name = "Jumlah Beli",
+    Range = {1, 99},
+    Increment = 1,
+    Suffix = "",
+    CurrentValue = 10,
+    Flag = "BuyQuantity",
+    Callback = function(val)
+        BuyQuantity = val
+    end
+})
+
+ShopTab:CreateButton({
+    Name = "Beli Bibit Sekarang",
+    Callback = function()
+        local result = BuySeed(SelectedSeedToBuy, BuyQuantity)
+        if result and result.Success then
+            Rayfield:Notify({ Title = "Berhasil", Content = result.Message or "Bibit berhasil dibeli!", Duration = 3 })
+        else
+            Rayfield:Notify({ Title = "Gagal", Content = result and result.Message or "Gagal membeli bibit.", Duration = 3 })
+        end
+    end
+})
+
+ShopTab:CreateDivider()
+
+ShopTab:CreateButton({
+    Name = "Ambil Daftar Bibit dari Server",
+    Callback = function()
+        local seeds = GetSeedList()
+        if #seeds > 0 then
+            Rayfield:Notify({ Title = "Sukses", Content = "Daftar bibit berhasil diambil! (" .. #seeds .. " items)", Duration = 3 })
+        else
+            Rayfield:Notify({ Title = "Error", Content = "Gagal mengambil daftarbibit.", Duration = 3 })
+        end
+    end
+})
+
+ShopTab:CreateButton({
+    Name = "Ambil Daftar Alat dari Server",
+    Callback = function()
+        local tools = GetToolList()
+        if #tools > 0 then
+            Rayfield:Notify({ Title = "Sukses", Content = "Daftar alat berhasil diambil! (" .. #tools .. " items)", Duration = 3 })
+        else
+            Rayfield:Notify({ Title = "Error", Content = "Gagal mengambil daftar alat.", Duration = 3 })
+        end
+    end
+})
+
+ShopTab:CreateDivider()
+
+-- Auto Buy Seeds Toggle
+ShopTab:CreateToggle({
+    Name = "Auto Beli Bibit",
+    CurrentValue = false,
+    Flag = "AutoBuySeeds",
+    Callback = function(val)
+        AutoBuyingSeeds = val
+        if val then
+            if not AutoBuySeedConn then
+                AutoBuySeedConn = RunService.Heartbeat:Connect(function()
+                    if AutoBuyingSeeds then
+                        local result = BuySeed(SelectedSeedToBuy, BuyQuantity)
+                        if result and result.Success then
+                            -- Success notification optional
+                        end
+                        task.wait(BuySeedDelay)
+                    end
+                end)
+            end
+            Rayfield:Notify({ Title = "Auto Beli Bibit", Content = "Aktif!", Duration = 2 })
+        else
+            if AutoBuySeedConn then
+                AutoBuySeedConn:Disconnect()
+                AutoBuySeedConn = nil
+            end
+            Rayfield:Notify({ Title = "Auto Beli Bibit", Content = "Nonaktif!", Duration = 2 })
+        end
+    end
+})
+
+ShopTab:CreateSlider({
+    Name = "Auto Beli Delay",
+    Range = {0.5, 10},
+    Increment = 0.5,
+    Suffix = "s",
+    CurrentValue = 2.0,
+    Flag = "BuySeedDelay",
+    Callback = function(val)
+        BuySeedDelay = val
+    end
+})
+
+-- ---- Tab 8: Info ----
 local InfoTab = Window:CreateTab("ℹ️ Info", "info")
 
 InfoTab:CreateSection("Crop Info")
@@ -843,6 +1028,8 @@ InfoTab:CreateLabel("PlantCrop / PlantLahanCrop - Tanam tanaman")
 InfoTab:CreateLabel("HarvestCrop - Panen tanaman")
 InfoTab:CreateLabel("RequestSell - Jual hasil panen")
 InfoTab:CreateLabel("ToggleAutoHarvest - Auto harvest server-side")
+InfoTab:CreateLabel("RequestShop - Beli bibit (GET_LIST, BUY)")
+InfoTab:CreateLabel("RequestToolShop - Beli alat (GET_LIST, BUY)")
 
 -- ================================================
 --   Notify on Load
