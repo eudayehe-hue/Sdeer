@@ -70,10 +70,10 @@ local ShopData = {
 local function GetSeedList()
     local RequestShop = GetRemote("RequestShop")
     if RequestShop then
-        local result = pcall(function()
+        local success, result = pcall(function()
             return RequestShop:InvokeServer("GET_LIST")
         end)
-        if result and result.Success and result.Seeds then
+        if success and result and result.Success and result.Seeds then
             ShopData.Seeds = result.Seeds
             return result.Seeds
         end
@@ -85,10 +85,10 @@ end
 local function GetToolList()
     local RequestToolShop = GetRemote("RequestToolShop")
     if RequestToolShop then
-        local result = pcall(function()
+        local success, result = pcall(function()
             return RequestToolShop:InvokeServer("GET_LIST")
         end)
-        if result and result.Success and result.Tools then
+        if success and result and result.Success and result.Tools then
             ShopData.Tools = result.Tools
             return result.Tools
         end
@@ -100,10 +100,10 @@ end
 local function BuySeed(seedName, quantity)
     local RequestShop = GetRemote("RequestShop")
     if RequestShop then
-        local result = pcall(function()
+        local success, result = pcall(function()
             return RequestShop:InvokeServer("BUY", seedName, quantity or 1)
         end)
-        return result
+        return success and result
     end
     return nil
 end
@@ -112,10 +112,10 @@ end
 local function BuyTool(toolName)
     local RequestToolShop = GetRemote("RequestToolShop")
     if RequestToolShop then
-        local result = pcall(function()
+        local success, result = pcall(function()
             return RequestToolShop:InvokeServer("BUY", toolName)
         end)
-        return result
+        return success and result
     end
     return nil
 end
@@ -141,27 +141,27 @@ local GiftData = {
     History = {}
 }
 
-local function GetGiftableList()
+local function GetGiftableList(userId)
     local RequestGift = GetTutorialRemote("RequestGift")
     if RequestGift then
-        local result = pcall(function()
-            return RequestGift:InvokeServer("GET_GIFTABLE_LIST")
+        local success, result = pcall(function()
+            return RequestGift:InvokeServer("GET_GIFTABLE_LIST", userId or LocalPlayer.UserId)
         end)
-        if result and result.Success then
-            GiftData.GiftableList = result.List or {}
-            return result.List
+        if success and result and result.Success then
+            GiftData.GiftableList = result.Passes or {}
+            return result.Passes
         end
     end
     return {}
 end
 
-local function ClaimGift(targetUserId)
+local function ClaimGift(userId, passId)
     local RequestGift = GetTutorialRemote("RequestGift")
     if RequestGift then
-        local result = pcall(function()
-            return RequestGift:InvokeServer("PROMPT_GIFT", targetUserId)
+        local success, result = pcall(function()
+            return RequestGift:InvokeServer("PROMPT_GIFT", userId, passId)
         end)
-        return result
+        return success and result
     end
     return nil
 end
@@ -169,10 +169,10 @@ end
 local function GetGiftHistory()
     local RequestGift = GetTutorialRemote("RequestGift")
     if RequestGift then
-        local result = pcall(function()
+        local success, result = pcall(function()
             return RequestGift:InvokeServer("GET_HISTORY")
         end)
-        if result and result.Success then
+        if success and result and result.Success then
             GiftData.History = result.History or {}
             return result.History
         end
@@ -307,7 +307,7 @@ end
 
 -- Plant at player's current position (Y - 3) using the PlantCrop remote
 local function PlantAtPosition()
-    local PlantCrop = GetRemote("PlantCrop")
+    local PlantCrop = GetTutorialRemote("PlantCrop")
     if not PlantCrop then return end
 
     local cropData = CropConfig[SelectedCrop]
@@ -329,7 +329,7 @@ end
 
 -- Harvest all ready crops
 local function HarvestAll()
-    local HarvestCrop = GetRemote("HarvestCrop")
+    local HarvestCrop = GetTutorialRemote("HarvestCrop")
     if not HarvestCrop then return end
     -- The server handles which crops are ready; just fire
     pcall(function()
@@ -342,28 +342,28 @@ local function SellAll()
     local RequestSell = GetRemote("RequestSell")
     if not RequestSell then return end
 
-    -- Sell all crops
+    -- Sell all crops and seeds
     pcall(function()
         local list = RequestSell:InvokeServer("GET_LIST")
-        if list and type(list) == "table" then
-            for itemName, amount in pairs(list) do
-                if amount and amount > 0 then
+        if list and list.Success and list.Items then
+            for _, item in ipairs(list.Items) do
+                local itemName = item.Name
+                local amount = item.Owned or 0
+                if amount > 0 then
                     pcall(function()
-                        RequestSell:InvokeServer("SELL", itemName, amount)
+                        if itemName and string.match(string.lower(itemName), "bibit") then
+                            -- Sell seeds
+                            RequestSell:InvokeServer("SELL_SEED", itemName, amount)
+                        else
+                            -- Sell crops
+                            RequestSell:InvokeServer("SELL", itemName, amount)
+                        end
                     end)
                     task.wait(0.1)
                 end
             end
         end
     end)
-
-    -- Also try sell all fruit (Sawit/Durian)
-    for _, fruitType in ipairs({"Sawit", "Durian"}) do
-        pcall(function()
-            RequestSell:InvokeServer("SELL_ALL_FRUIT", fruitType)
-        end)
-        task.wait(0.1)
-    end
 end
 
 -- Toggle Auto Harvest (server-side feature)
@@ -398,7 +398,7 @@ local function StartAutoFarm()
         if not hrp then return end
 
         -- Plant at current position (Y - 3)
-        local PlantCrop = GetRemote("PlantCrop")
+        local PlantCrop = GetTutorialRemote("PlantCrop")
         if PlantCrop then
             local cropData = CropConfig[SelectedCrop]
             if cropData then
@@ -473,7 +473,7 @@ local function StartAutoPlant()
         while AutoPlanting do
             local hrp = GetHRP()
             if hrp then
-                local PlantCrop = GetRemote("PlantCrop")
+                local PlantCrop = GetTutorialRemote("PlantCrop")
                 local cropData = CropConfig[SelectedCrop]
                 if PlantCrop and cropData then
                     EquipTool(cropData.ToolName)
@@ -1098,12 +1098,24 @@ GiftTab:CreateToggle({
             if not AutoClaimGiftConn then
                 AutoClaimGiftConn = RunService.Heartbeat:Connect(function()
                     if AutoClaimingGift then
-                        local gifts = GetGiftableList()
-                        for _, gift in ipairs(gifts) do
-                            if gift and gift.UserId then
-                                local result = ClaimGift(gift.UserId)
-                                if result and result.Success then
-                                    Rayfield:Notify({ Title = "Gift Diklaim!", Content = result.Message or "Gift berhasil!", Duration = 2 })
+                        -- Get giftable players first
+                        local players = GetGiftableList()
+                        for _, player in ipairs(players) do
+                            if player and player.UserId then
+                                -- Get passes for this player
+                                local passes = GetGiftableList(player.UserId)
+                                for _, pass in ipairs(passes) do
+                                    if pass and pass.Name then
+                                        -- Claim the pass
+                                        local result = ClaimGift(player.UserId, pass.Name)
+                                        if result and result.Success then
+                                            Rayfield:Notify({ 
+                                                Title = "Gift Diklaim!", 
+                                                Content = result.Message or ("Berhasil klaim " .. (pass.DisplayName or pass.Name) .. " untuk " .. (player.DisplayName or "Player")), 
+                                                Duration = 2 
+                                            })
+                                        end
+                                    end
                                 end
                             end
                         end
