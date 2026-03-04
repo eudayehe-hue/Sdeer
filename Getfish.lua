@@ -240,9 +240,9 @@ local cyclePhase = "NORMAL"
 local firstReelDone = false
 local firstThrowDone = false
 
--- Variabel untuk Blatant Mode 2
+-- Variabel untuk Blatant Mode
 local blatant2Task = nil
-local currentBlatantMode = "1" -- default mode 1
+local bobberFireTask = nil
 
 local function getUUID()
     local c = player.Character
@@ -447,66 +447,135 @@ local function stopFishing()
 end
 
 -- =============================================================================
--- BLATANT MODE 2 (sesuai permintaan)
+-- BLATANT MODE (RemoteAutofishing → throw → ReelFinished → Reel → stop → repeat)
+-- Parallel: BobberFire setiap 0.01s
 -- =============================================================================
+
+local function findRemoteDeep(name)
+    -- Cari di lokasi umum dulu
+    local locations = {
+        ReplicatedStorage,
+        ReplicatedStorage:FindFirstChild("Remotes"),
+        ReplicatedStorage:FindFirstChild("Events"),
+        ReplicatedStorage:FindFirstChild("RemoteEvents"),
+        ReplicatedStorage:FindFirstChild("RF"),
+        ReplicatedStorage:FindFirstChild("RE"),
+        ReplicatedStorage:FindFirstChild("Fishing"),
+        ReplicatedStorage:FindFirstChild("Fishing") and ReplicatedStorage.Fishing:FindFirstChild("ToServer"),
+        ReplicatedStorage:FindFirstChild("LevelSystem") and ReplicatedStorage.LevelSystem:FindFirstChild("ToServer"),
+    }
+    for _, loc in ipairs(locations) do
+        if loc then
+            local r = loc:FindFirstChild(name)
+            if r then return r end
+        end
+    end
+    -- Deep search
+    for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
+        if v.Name == name then return v end
+    end
+    return nil
+end
+
+local function fireRemote(remote, ...)
+    if not remote then return end
+    pcall(function()
+        if remote:IsA("RemoteEvent") then
+            remote:FireServer(...)
+        elseif remote:IsA("RemoteFunction") then
+            remote:InvokeServer(...)
+        end
+    end)
+end
+
 local function startBlatant2()
     if fishingON then return end
     fishingON = true
-    
-    -- Panggil StartAutoFishing di awal
-    pcall(function()
-        if StartAutoFishing then 
-            StartAutoFishing:FireServer()
-            print("[Blatant2] StartAutoFishing fired")
-        end
-    end)
-    
-    local uuid = getUUID()
-    local startTime = tick()  -- waktu mulai untuk jeda awal 2 detik
-    local lastReelTime = 0    -- waktu terakhir ReelFinished di-fire
-    local initialDelayDone = false  -- flag untuk jeda awal
-    
+
+    -- Loop utama: RemoteAutofishing → throw → ReelFinished → Reel → stop → repeat
     blatant2Task = task.spawn(function()
         while fishingON do
-            local now = tick()
-            
-            -- Loop setiap 0.020 detik fire Fishing_RemoteRetract
             pcall(function()
-                if Fishing_RemoteRetract then
-                    Fishing_RemoteRetract:FireServer(uuid)
+                -- Step 1: RemoteAutofishing (start auto fishing)
+                local remoteAutoFishing = findRemoteDeep("RemoteAutofishing")
+                    or findRemoteDeep("StartAutoFishing")
+                    or findRemoteDeep("AutoFishing")
+                fireRemote(remoteAutoFishing)
+                task.wait(0.1)
+
+                -- Step 2: throw (lempar kail)
+                local throwRemote = findRemoteDeep("throw")
+                    or findRemoteDeep("Throw")
+                    or findRemoteDeep("Fishing_RemoteThrow")
+                    or findRemoteDeep("CastRod")
+                if throwRemote then
+                    -- Fishing_RemoteThrow butuh parameter power + uuid
+                    if throwRemote.Name == "Fishing_RemoteThrow" then
+                        local uuid = getUUID()
+                        fireRemote(throwRemote, 0.77109680999911, uuid)
+                    else
+                        fireRemote(throwRemote)
+                    end
                 end
-            end)
-            
-            -- Jeda awal 2 detik sebelum mulai fire ReelFinished
-            if not initialDelayDone then
-                if now - startTime >= 2.0 then
-                    initialDelayDone = true
-                    lastReelTime = now  -- set waktu pertama kali
-                    print("[Blatant2] Initial delay 2 detik selesai, mulai fire ReelFinished")
-                end
-            else
-                -- Setelah jeda awal, fire ReelFinished setiap 1.601 detik
-                if now - lastReelTime >= 1.601 then
+                task.wait(0.2)
+
+                -- Step 3: ReelFinished (sinyal reel selesai)
+                local reelFinishedRemote = findRemoteDeep("ReelFinished")
+                    or findRemoteDeep("reelfinished")
+                    or findRemoteDeep("FinishReel")
+                if reelFinishedRemote then
+                    local uuid = getUUID()
+                    -- Coba dengan parameter dulu, fallback tanpa parameter
                     pcall(function()
-                        local ReelFinished = ReplicatedStorage:FindFirstChild("Fishing") and 
-                                             ReplicatedStorage.Fishing:FindFirstChild("ToServer") and 
-                                             ReplicatedStorage.Fishing.ToServer:FindFirstChild("ReelFinished")
-                        if ReelFinished then
-                            ReelFinished:FireServer({
-                                duration = 12,
-                                result = "SUCCESS",
-                                insideRatio = 1
-                            }, uuid)
-                            print("[Blatant2] ReelFinished fired")
+                        if reelFinishedRemote:IsA("RemoteEvent") then
+                            reelFinishedRemote:FireServer({duration=12, result="SUCCESS", insideRatio=1}, uuid)
+                        elseif reelFinishedRemote:IsA("RemoteFunction") then
+                            reelFinishedRemote:InvokeServer({duration=12, result="SUCCESS", insideRatio=1}, uuid)
                         end
                     end)
-                    lastReelTime = now
                 end
-            end
-            
-            task.wait(0.02)  -- loop setiap 0.02 detik
+                task.wait(0.1)
+
+                -- Step 4: Reel (tarik ikan)
+                local reelRemote = findRemoteDeep("Reel")
+                    or findRemoteDeep("reel")
+                    or findRemoteDeep("ReelFish")
+                    or findRemoteDeep("Fishing_RemoteRetract")
+                if reelRemote then
+                    if reelRemote.Name == "Fishing_RemoteRetract" then
+                        local uuid = getUUID()
+                        fireRemote(reelRemote, uuid)
+                    else
+                        fireRemote(reelRemote)
+                    end
+                end
+                task.wait(0.1)
+
+                -- Step 5: Stop auto fishing (reset state)
+                local stopRemote = findRemoteDeep("StopAutoFishing")
+                    or findRemoteDeep("StopFishing")
+                    or findRemoteDeep("CancelFishing")
+                fireRemote(stopRemote)
+                task.wait(0.05)
+            end)
+            task.wait(0.05)
         end
         blatant2Task = nil
+    end)
+
+    -- Loop paralel: BobberFire setiap 0.01s
+    bobberFireTask = task.spawn(function()
+        while fishingON do
+            pcall(function()
+                local bobberRemote = findRemoteDeep("BobberFire")
+                    or findRemoteDeep("bobberfire")
+                    or findRemoteDeep("Bobber")
+                    or findRemoteDeep("BobberEvent")
+                fireRemote(bobberRemote)
+            end)
+            task.wait(0.01)
+        end
+        bobberFireTask = nil
     end)
 end
 
@@ -516,32 +585,23 @@ local function stopBlatant2()
         task.cancel(blatant2Task)
         blatant2Task = nil
     end
+    if bobberFireTask then
+        task.cancel(bobberFireTask)
+        bobberFireTask = nil
+    end
     -- Panggil StopAutoFishing
     pcall(function()
-        if StopAutoFishing then 
+        if StopAutoFishing then
             StopAutoFishing:FireServer()
-            print("[Blatant2] StopAutoFishing fired")
         end
     end)
 end
 
-function BlatantModule.SetMode(mode)
-    currentBlatantMode = mode
-end
-
 function BlatantModule.Toggle(state)
     if state then
-        if currentBlatantMode == "1" then
-            startFishing()
-        else
-            startBlatant2()
-        end
+        startBlatant2()
     else
-        if currentBlatantMode == "1" then
-            stopFishing()
-        else
-            stopBlatant2()
-        end
+        stopBlatant2()
     end
 end
 
@@ -631,7 +691,6 @@ end
         activeMegalodon = false,
         adjustPosition = false,
         blatantMode = false,
-        blatantModeType = "Blatant 1", -- tambahan untuk dropdown
     }
 
     local autoFishingTask = nil
@@ -1367,26 +1426,9 @@ end
                 BlatantModule.Toggle(v)
                 Rayfield:Notify({
                     Title = "Blatant Mode",
-                    Content = v and "Aktif - RATW Fishing Core" or "Dimatikan",
+                    Content = v and "Aktif - AutoFishing + BobberFire" or "Dimatikan",
                     Duration = 3
                 })
-            end,
-        })
-
-        -- Dropdown untuk memilih tipe Blatant Mode
-        FishTab:CreateDropdown({
-            Name = "⚡ Blatant Mode Type",
-            Options = {"Blatant 1", "Blatant 2"},
-            CurrentOption = {Settings.blatantModeType},
-            MultipleOptions = false,
-            Callback = function(v)
-                Settings.blatantModeType = v[1]
-                BlatantModule.SetMode(v[1] == "Blatant 1" and "1" or "2")
-                if Settings.blatantMode then
-                    -- restart blatant mode dengan tipe baru
-                    BlatantModule.Toggle(false)
-                    BlatantModule.Toggle(true)
-                end
             end,
         })
 
